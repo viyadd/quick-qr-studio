@@ -8,7 +8,7 @@ import { QRCodeCanvas } from "qrcode.react"; // Импортируем комп�
 // interface URLGeneratorProps {
 // }
 
-const URLGenerator: React.FC /* <URLGeneratorProps> */ = () => {
+export const QrUrlGenerator: React.FC /* <URLGeneratorProps> */ = () => {
   // Состояние для хранения введенного пользователем URL
   const [urlValue, setUrlValue] = useState<string>("https://example.com");
 
@@ -25,7 +25,7 @@ const URLGenerator: React.FC /* <URLGeneratorProps> */ = () => {
         size={256}
         level="H"
         imageSettings={{
-          src: null,
+          src: "",
           height: 30,
           width: 30,
           excavate: true,
@@ -84,4 +84,4 @@ const URLGenerator: React.FC /* <URLGeneratorProps> */ = () => {
   );
 };
 
-export default URLGenerator;
+export default QrUrlGenerator;

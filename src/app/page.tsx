@@ -1,7 +1,7 @@
 // src/app/page.tsx
 import { Container, Typography } from "@mui/material";
-import URLGenerator from "@/shared/ui/URLGenerator";
 import { ThemeToggler } from "@/shared/ui";
+import { QrCodeTabs } from "@/widgets";
 
 export default function Home() {
   return (
@@ -12,8 +12,7 @@ export default function Home() {
           <Typography variant="h3" component="h1" gutterBottom align="center">
             ⚡ QuickQR Studio
           </Typography>
-          <URLGenerator />
-          {/* Здесь будут другие генераторы позже */}
+          <QrCodeTabs />
         </Container>
       </main>
     </div>
