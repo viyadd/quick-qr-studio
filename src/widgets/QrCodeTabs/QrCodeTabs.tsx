@@ -9,6 +9,7 @@ import {
   QrUrlGenerator,
   QrWifiGenerator,
 } from "@/features";
+import { useI18n } from "@/shared/i18n/I18nContext";
 
 // Определяем пропсы для компонента TabPanel (для удобства)
 interface TabPanelProps {
@@ -44,7 +45,7 @@ function a11yProps(index: number) {
 }
 
 export const QrCodeTabs: React.FC = () => {
-  // Состояние для активной вкладки (по умолчанию: 0 - "Текст / URL")
+  const { t } = useI18n();
   const [value, setValue] = useState(0);
 
   // Обработчик смены вкладки
@@ -63,10 +64,10 @@ export const QrCodeTabs: React.FC = () => {
           variant="scrollable"
           scrollButtons="auto"
         >
-          <Tab label="Текст / URL" {...a11yProps(0)} />
-          <Tab label="Wi-Fi" {...a11yProps(1)} />
-          <Tab label="Контакты (VCard/MeCard)" {...a11yProps(2)} />
-          <Tab label="Email / SMS" {...a11yProps(3)} />
+          <Tab label={t("tab_url_text")} {...a11yProps(0)} />
+          <Tab label={t("tab_wifi")} {...a11yProps(1)} />
+          <Tab label={t("tab_contacts")} {...a11yProps(2)} />
+          <Tab label={t("tab_email_sms")} {...a11yProps(3)} />
         </Tabs>
       </Box>
 

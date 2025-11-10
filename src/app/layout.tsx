@@ -2,6 +2,7 @@
 
 import type { Metadata } from "next";
 import ThemeRegistry from "@/theme/ThemeRegistry";
+import { I18nProvider } from "@/shared/i18n/I18nContext";
 
 export const metadata: Metadata = {
   title: "Create Next App",
@@ -21,9 +22,11 @@ export default function RootLayout({
           content="emotion-insertion-point"
         />
       </head>
-      <ThemeRegistry>
-        <body>{children}</body>
-      </ThemeRegistry>
+      <I18nProvider>
+        <ThemeRegistry>
+          <body>{children}</body>
+        </ThemeRegistry>
+      </I18nProvider>
     </html>
   );
 }
