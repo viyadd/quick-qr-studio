@@ -14,7 +14,9 @@ export type TranslationKeys =
   | "url_label"
   | "url_helper_text"
   | "url_placeholder"
-  | "url_scan_caption";
+  | "url_scan_caption"
+  | "url_error_invalid"
+  | "url_error_empty";
 
 // Тип для языкового словаря
 export type Language = "ru" | "en";
@@ -36,6 +38,8 @@ export const i18nResources: Record<Language, Translations> = {
     url_helper_text: "Код будет обновляться в реальном времени.",
     url_placeholder: "Введите URL или текст для кодирования",
     url_scan_caption: "Сканируйте этот код, чтобы проверить!",
+    url_error_invalid: "Введите корректный URL (например, https://...)",
+    url_error_empty: "QR-код будет пустым, если не ввести данные.",
   },
   en: {
     app_title: "⚡ QuickQR Studio",
@@ -51,5 +55,7 @@ export const i18nResources: Record<Language, Translations> = {
     url_helper_text: "The code updates in real-time.",
     url_placeholder: "Enter URL or text to encode",
     url_scan_caption: "Scan this code to check!",
+    url_error_invalid: "Please enter a valid URL (e.g., https://...)",
+    url_error_empty: "The QR code will be empty if no data is entered.",
   },
 };

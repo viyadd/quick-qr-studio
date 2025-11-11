@@ -1,13 +1,25 @@
 // src/shared/ui/URLGenerator.tsx
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { TextField, Box, Typography } from "@mui/material";
 import { useI18n } from "@/shared/i18n/I18nContext";
 import { QrCodeDisplay } from "@/shared/ui";
 
 // interface URLGeneratorProps {
 // }
+
+const isValidUrl = (url: string): boolean => {
+  try {
+    // Пробуем создать объект URL. Если это удается, URL считается валидным.
+    // Это достаточно строго, но хорошо отсекает невалидные форматы.
+    new URL(url);
+    return true;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (e: unknown) {
+    return false;
+  }
+};
 
 export const QrUrlGenerator: React.FC /* <URLGeneratorProps> */ = () => {
   const { t } = useI18n();
@@ -19,6 +31,34 @@ export const QrUrlGenerator: React.FC /* <URLGeneratorProps> */ = () => {
   };
 
   const qrData = urlValue.trim();
+
+  const validation = useMemo(() => {
+    const trimmedValue = qrData;
+
+    // 1. Проверка на пустоту
+    if (!trimmedValue) {
+      return {
+        error: false, // Не ошибка, а предупреждение
+        helperText: t("url_error_empty"),
+        validData: "", // Не кодируем пустую строку
+      };
+    }
+
+    if (!isValidUrl(trimmedValue)) {
+      return {
+        error: true, // Настоящая ошибка
+        helperText: t("url_error_invalid"),
+        validData: "", // Не кодируем невалидные данные
+      };
+    }
+
+    // 3. Валидно
+    return {
+      error: false,
+      helperText: t("url_helper_text"), // Используем стандартный текст
+      validData: trimmedValue, // Кодируем валидные данные
+    };
+  }, [qrData, t]);
 
   return (
     <Box
@@ -41,11 +81,15 @@ export const QrUrlGenerator: React.FC /* <URLGeneratorProps> */ = () => {
         value={urlValue}
         onChange={handleUrlChange}
         margin="normal"
+        error={validation.error}
         helperText={t("url_helper_text")}
       />
 
       {/* Область вывода QR-кода (Карточка Paper) */}
-      <QrCodeDisplay value={qrData} placeholderText={t("url_placeholder")} />
+      <QrCodeDisplay
+        value={validation.validData}
+        placeholderText={t("url_placeholder")}
+      />
 
       <Typography
         variant="caption"
