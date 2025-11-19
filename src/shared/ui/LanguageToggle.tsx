@@ -3,7 +3,6 @@
 
 import React from "react";
 import { IconButton, Tooltip } from "@mui/material";
-// import TranslateIcon from "@mui/icons-material/Translate";
 import { useI18n } from "@/shared/i18n/I18nContext";
 import { Language } from "@/shared/i18n/translations";
 
@@ -21,15 +20,13 @@ export const LanguageToggle: React.FC = () => {
   const buttonText = lang === "ru" ? "EN" : "RU";
 
   return (
-    <Tooltip title={tooltipText} placement="left">
+    <Tooltip title={tooltipText} placement="right">
       <IconButton
         onClick={toggleLanguage}
         color="inherit"
         size="small"
         sx={{
           p: 1.2,
-          ml: 1,
-          border: "1px solid currentColor",
           fontSize: "0.75rem",
           fontWeight: "bold",
         }}
