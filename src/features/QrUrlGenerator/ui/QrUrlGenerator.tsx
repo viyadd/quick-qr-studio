@@ -1,64 +1,91 @@
 // src/shared/ui/URLGenerator.tsx
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { TextField, Box, Typography } from "@mui/material";
+
+import {
+  useForm,
+  Controller,
+  useWatch,
+  Control,
+  FieldErrors,
+} from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  QrUrlGeneratorSchema,
+  QrUrlFormData,
+  defaultQrUrlFormData,
+} from "../model/QrUrlGeneratorSchema";
+
 import { useI18n } from "@/shared/i18n/I18nContext";
 import { QrCodeDisplay } from "@/shared/ui";
 
-// interface URLGeneratorProps {
-// }
+// Этот компонент изолирует useWatch и отображает QR-код.
+const QrCodeDisplaySection: React.FC<{
+  control: Control<QrUrlFormData>;
+  errors: FieldErrors<QrUrlFormData>;
+}> = ({ control, errors }) => {
+  const { t } = useI18n(); // Получаем функцию перевода
 
-const isValidUrl = (url: string): boolean => {
-  try {
-    // Пробуем создать объект URL. Если это удается, URL считается валидным.
-    // Это достаточно строго, но хорошо отсекает невалидные форматы.
-    new URL(url);
-    return true;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  } catch (e: unknown) {
-    return false;
-  }
+  // 1. Используем useWatch для получения данных.
+  const formData = useWatch<QrUrlFormData>({
+    control,
+    defaultValue: defaultQrUrlFormData,
+  }) as QrUrlFormData;
+
+  // Мемоизированные данные для QR-кода
+  const qrData = useMemo(() => {
+    // Если есть ошибка (например, пустое поле), мы не кодируем данные.
+    // Zod вернет нам ошибку, если поле пустое (min(1)).
+    if (errors.urlOrText) {
+      return "";
+    }
+    // Если ошибок нет, кодируем значение поля.
+    return formData.urlOrText.trim();
+  }, [formData, errors.urlOrText]);
+
+  // Определяем текст заглушки/ошибки
+  const placeholderKey = errors.urlOrText
+    ? (errors.urlOrText.message as "url_error_empty") // Сообщение Zod - это ключ перевода
+    : "url_placeholder";
+
+  const placeholderText = t(placeholderKey);
+
+  return (
+    <>
+      {/* 1. ИСПОЛЬЗУЕМ QrCodeDisplay */}
+      <QrCodeDisplay value={qrData} placeholderText={placeholderText} />
+
+      {/* 2. Подпись под QR-кодом */}
+      <Typography
+        variant="caption"
+        display="block"
+        sx={{ mt: 1, textAlign: "center", color: "text.secondary" }}
+      >
+        {t("url_scan_caption")}
+      </Typography>
+    </>
+  );
 };
 
-export const QrUrlGenerator: React.FC /* <URLGeneratorProps> */ = () => {
+// --- ОСНОВНОЙ КОМПОНЕНТ ---
+export const QrUrlGenerator: React.FC = () => {
   const { t } = useI18n();
-  const [urlValue, setUrlValue] = useState<string>("https://example.com");
 
-  // Обработчик изменения в поле ввода
-  const handleUrlChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setUrlValue(event.target.value);
-  };
+  const {
+    control,
+    formState: { errors },
+  } = useForm<QrUrlFormData>({
+    resolver: zodResolver(QrUrlGeneratorSchema),
+    defaultValues: defaultQrUrlFormData,
+    mode: "onChange",
+  });
 
-  const qrData = urlValue.trim();
-
-  const validation = useMemo(() => {
-    const trimmedValue = qrData;
-
-    // 1. Проверка на пустоту
-    if (!trimmedValue) {
-      return {
-        error: false, // Не ошибка, а предупреждение
-        helperText: t("url_error_empty"),
-        validData: "", // Не кодируем пустую строку
-      };
-    }
-
-    if (!isValidUrl(trimmedValue)) {
-      return {
-        error: true, // Настоящая ошибка
-        helperText: t("url_error_invalid"),
-        validData: "", // Не кодируем невалидные данные
-      };
-    }
-
-    // 3. Валидно
-    return {
-      error: false,
-      helperText: t("url_helper_text"), // Используем стандартный текст
-      validData: trimmedValue, // Кодируем валидные данные
-    };
-  }, [qrData, t]);
+  // Определяем, какой helperText показывать
+  const helperTextKey = errors.urlOrText
+    ? (errors.urlOrText.message as "url_error_empty")
+    : "url_helper_text";
 
   return (
     <Box
@@ -73,31 +100,28 @@ export const QrUrlGenerator: React.FC /* <URLGeneratorProps> */ = () => {
         {t("generator_url_title")}
       </Typography>
 
-      {/* Поле ввода */}
-      <TextField
-        fullWidth
-        label={t("url_label")}
-        variant="outlined"
-        value={urlValue}
-        onChange={handleUrlChange}
-        margin="normal"
-        error={validation.error}
-        helperText={t("url_helper_text")}
+      {/* Поле ввода - ИСПОЛЬЗУЕМ CONTROLLER */}
+      <Controller
+        name="urlOrText"
+        control={control}
+        render={({ field }) => (
+          <TextField
+            {...field}
+            fullWidth
+            label={t("url_label")}
+            variant="outlined"
+            margin="normal"
+            // Используем сообщение об ошибке от RHF/Zod, если оно есть
+            error={!!errors.urlOrText}
+            helperText={t(helperTextKey)}
+          />
+        )}
       />
 
-      {/* Область вывода QR-кода (Карточка Paper) */}
-      <QrCodeDisplay
-        value={validation.validData}
-        placeholderText={t("url_placeholder")}
-      />
+      {/* Вставляем компонент для QR-кода */}
+      <QrCodeDisplaySection control={control} errors={errors} />
 
-      <Typography
-        variant="caption"
-        display="block"
-        sx={{ mt: 1, textAlign: "center", color: "text.secondary" }}
-      >
-        {t("url_scan_caption")}
-      </Typography>
+      {/* Удалили старую подпись, так как она перенесена в QrCodeDisplaySection */}
     </Box>
   );
 };

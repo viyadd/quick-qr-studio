@@ -1,9 +1,9 @@
 // src/features/QrWifiGenerator/model/QrWifiGeneratorSchema.ts
 
 import { z } from "zod";
+import { TranslationKeys } from "@/shared/i18n/translations";
 
-// Типы шифрования, которые используются в QrWifiGenerator.tsx
-// 'WPA', 'WEP', 'nopass'
+// Типы шифрования
 export const EncryptionTypeSchema = z.union([
   z.literal("WPA"),
   z.literal("WEP"),
@@ -12,17 +12,15 @@ export const EncryptionTypeSchema = z.union([
 
 /**
  * Схема валидации для формы генератора QR-кода Wi-Fi.
- *
- * Мы используем 'refine' (уточнение) Zod для условной валидации:
- * Пароль обязателен, если тип шифрования не 'nopass'.
+ * Zod-сообщения заменены на ключи i18n.
  */
 export const QrWifiGeneratorSchema = z
   .object({
     ssid: z
       .string()
       .trim()
-      .min(1, "SSID не может быть пустым")
-      .max(32, "SSID должен быть короче 32 символов"), // Стандартное ограничение для SSID
+      .min(1, { message: "wifi_error_ssid_required" as TranslationKeys }) // Ключ i18n
+      .max(32, { message: "wifi_error_ssid_max_length" as TranslationKeys }), // Ключ i18n
     password: z.string().trim(),
     encryption: EncryptionTypeSchema,
     isHidden: z.boolean(),
@@ -32,19 +30,32 @@ export const QrWifiGeneratorSchema = z
     if (data.encryption !== "nopass" && data.password.trim().length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Пароль обязателен для выбранного типа шифрования.",
+        message: "wifi_error_password_required" as TranslationKeys, // Ключ i18n
         path: ["password"],
       });
     }
   });
 
-// Тип данных формы, автоматически выведенный из схемы Zod
+// --- 2. Тип данных формы ---
 export type QrWifiFormData = z.infer<typeof QrWifiGeneratorSchema>;
 
+// --- 3. ФУНКЦИЯ ДЛЯ ЗНАЧЕНИЙ ПО УМОЛЧАНИЮ С ИНТЕРНАЦИОНАЛИЗАЦИЕЙ ---
+
+type MinimalTFunction = (key: TranslationKeys) => string;
+
 /**
- * Значения по умолчанию для формы.
- * Важно: они должны соответствовать типу QrWifiFormData
+ * Возвращает объект данных по умолчанию для формы Wi-Fi, используя функцию перевода.
  */
+export const getDefaultQrWifiFormData = (
+  t: MinimalTFunction
+): QrWifiFormData => ({
+  ssid: t("wifi_default_ssid"),
+  password: t("wifi_default_password"),
+  encryption: "WPA",
+  isHidden: false,
+});
+
+// Экспортируем пустые данные по умолчанию для RHF, если функция t недоступна
 export const defaultQrWifiFormData: QrWifiFormData = {
   ssid: "",
   password: "",

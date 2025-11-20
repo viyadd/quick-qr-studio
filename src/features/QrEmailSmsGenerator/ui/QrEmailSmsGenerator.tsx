@@ -1,36 +1,52 @@
 // src/features/QrEmailSmsGenerator/ui/QrEmailSmsGenerator.tsx
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useMemo } from "react";
 import {
   TextField,
   Box,
   Typography,
-  Paper,
   RadioGroup,
   FormControlLabel,
   Radio,
   FormControl,
   FormLabel,
 } from "@mui/material";
-import { QRCodeCanvas } from "qrcode.react";
 
-// Типы режима генерации
-type GeneratorMode = "email" | "sms";
+import {
+  useForm,
+  Controller,
+  useWatch,
+  Control,
+  FieldErrors,
+} from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useI18n } from "@/shared/i18n/I18nContext";
+import { QrCodeDisplay } from "@/shared/ui";
 
-// Функции для кодирования данных
-// 1. Кодирование Email
-const generateEmailString = (
-  to: string,
-  subject: string,
-  body: string
-): string => {
+import {
+  QrEmailSmsGeneratorSchema,
+  QrEmailSmsFormData,
+  defaultQrEmailSmsFormData,
+} from "../model/QrEmailSmsGeneratorSchema";
+import { TranslationKeys } from "@/shared/i18n/translations";
+
+type EmailMode = Extract<QrEmailSmsFormData, { mode: "email" }>;
+type SmsMode = Extract<QrEmailSmsFormData, { mode: "sms" }>;
+
+/** 1. Кодирование Email */
+const generateEmailString = (data: QrEmailSmsFormData): string => {
+  const { to, subject, body } = data as Extract<
+    QrEmailSmsFormData,
+    { mode: "email" }
+  >; // Приводим тип
+
   if (!to.trim()) {
-    return "Введите адрес получателя";
+    return ""; // Возвращаем пустую строку для активации заглушки QR-кода
   }
-  // Кодируем URL-параметры
-  const encodedSubject = encodeURIComponent(subject.trim());
-  const encodedBody = encodeURIComponent(body.trim());
+
+  const encodedSubject = encodeURIComponent(subject?.trim() || "");
+  const encodedBody = encodeURIComponent(body?.trim() || "");
 
   let emailString = `mailto:${to.trim()}`;
   const params: string[] = [];
@@ -49,74 +65,130 @@ const generateEmailString = (
   return emailString;
 };
 
-// 2. Кодирование SMS
-const generateSmsString = (phone: string, body: string): string => {
+/** 2. Кодирование SMS */
+const generateSmsString = (data: QrEmailSmsFormData): string => {
+  const { phone, body } = data as Extract<QrEmailSmsFormData, { mode: "sms" }>; // Приводим тип
+
   if (!phone.trim()) {
-    return "Введите номер телефона";
+    return ""; // Возвращаем пустую строку для активации заглушки QR-кода
   }
-  // Кодируем URL-параметры
-  const encodedBody = encodeURIComponent(body.trim());
+
+  const encodedBody = encodeURIComponent(body?.trim() || "");
 
   // Формат: SMSTO:<номер_телефона>:<текст_сообщения>
   return `SMSTO:${phone.trim()}:${encodedBody}`;
 };
 
-export const QrEmailSmsGenerator: React.FC = () => {
-  const [mode, setMode] = useState<GeneratorMode>("email");
-  const [emailTo, setEmailTo] = useState("");
-  const [emailSubject, setEmailSubject] = useState("");
-  const [emailBody, setEmailBody] = useState("");
-  const [smsPhone, setSmsPhone] = useState("");
-  const [smsBody, setSmsBody] = useState("");
+// --- ВЛОЖЕННЫЙ КОМПОНЕНТ ДЛЯ QR-КОДА ---
+const QrCodeDisplaySection: React.FC<{
+  control: Control<QrEmailSmsFormData>;
+  errors: FieldErrors<QrEmailSmsFormData>;
+}> = ({ control, errors }) => {
+  const { t } = useI18n();
 
-  // Мемоизированная строка данных для QR-кода
+  // Отслеживаем ВСЕ поля для генерации QR-кода
+  const formData = useWatch<QrEmailSmsFormData>({
+    control,
+    defaultValue: defaultQrEmailSmsFormData,
+  }) as QrEmailSmsFormData;
+
+  // Отслеживаем только режим, чтобы понять, какой раздел ошибок проверять
+  const mode = formData.mode;
+
+  const emailErrors = errors as FieldErrors<
+    Extract<QrEmailSmsFormData, { mode: "email" }>
+  >;
+  const smsErrors = errors as FieldErrors<
+    Extract<QrEmailSmsFormData, { mode: "sms" }>
+  >;
+
+  // Определяем, есть ли ошибки, которые препятствуют кодированию
+  const hasEncodingError =
+    mode === "email"
+      ? !!emailErrors.to // Проверяем обязательное поле 'to'
+      : !!smsErrors.phone || !!smsErrors.body; // Проверяем 'phone' и 'body' (для max length)
+
   const qrData = useMemo(() => {
-    if (mode === "email") {
-      return generateEmailString(emailTo, emailSubject, emailBody);
-    } else {
-      return generateSmsString(smsPhone, smsBody);
+    // Если есть явная ошибка, мы не кодируем ничего
+    if (hasEncodingError) {
+      return "";
     }
-  }, [mode, emailTo, emailSubject, emailBody, smsPhone, smsBody]);
 
-  // Определяем, есть ли валидные данные для отображения QR-кода
-  const hasData = useMemo(() => {
+    // Кодируем данные в зависимости от режима
+    return mode === "email"
+      ? generateEmailString(formData)
+      : generateSmsString(formData);
+  }, [formData, mode, hasEncodingError]);
+
+  // Определяем текст заглушки/ошибки
+  let placeholderKey: TranslationKeys;
+
+  if (hasEncodingError) {
     if (mode === "email") {
-      // Для Email достаточно только адреса
-      return emailTo.trim().length > 0;
+      // Сообщение об ошибке для обязательного поля 'to'
+      placeholderKey =
+        (emailErrors.to?.message as TranslationKeys) || "url_placeholder";
     } else {
-      // Для SMS достаточно только номера
-      return smsPhone.trim().length > 0;
+      // Приоритет ошибки: phone (обязательное) > body (длина)
+      placeholderKey =
+        (smsErrors.phone?.message as TranslationKeys) ||
+        (smsErrors.body?.message as TranslationKeys) ||
+        "url_placeholder";
     }
-  }, [mode, emailTo, smsPhone]);
+  } else {
+    placeholderKey = "url_placeholder";
+  }
 
-  // Мемоизируем компонент QR-кода
-  const qrCodeElement = useMemo(
-    () => (
-      <QRCodeCanvas
-        // Если нет данных, показываем заглушку, иначе - QR-код
-        value={hasData ? qrData : "Введите необходимые данные"}
-        size={256}
-        level="H"
-        imageSettings={{
-          src: "",
-          height: 30,
-          width: 30,
-          excavate: true,
+  // Используем i18n
+  const placeholderText = t(placeholderKey);
+
+  return (
+    <>
+      {/* 1. ИСПОЛЬЗУЕМ QrCodeDisplay */}
+      <QrCodeDisplay value={qrData} placeholderText={placeholderText} />
+
+      {/* 2. Отображение сгенерированных данных для проверки */}
+      <Typography
+        variant="body2"
+        sx={{
+          mt: 2,
+          textAlign: "center",
+          color: "text.secondary",
+          wordBreak: "break-all",
         }}
-      />
-    ),
-    [qrData, hasData]
-  );
+      >
+        **Кодируемые данные:** {qrData || t("url_placeholder")}
+      </Typography>
 
-  // Отображаемый контент QR-кода
-  const displayQrCode = hasData ? (
-    qrCodeElement
-  ) : (
-    <Typography color="text.secondary">
-      Введите **{mode === "email" ? "адрес Email" : "номер телефона"}** для
-      генерации QR-кода.
-    </Typography>
+      <Typography
+        variant="caption"
+        display="block"
+        sx={{ mt: 1, textAlign: "center", color: "text.secondary" }}
+      >
+        {t("url_scan_caption")}
+      </Typography>
+    </>
   );
+};
+
+// --- ОСНОВНОЙ КОМПОНЕНТ ---
+export const QrEmailSmsGenerator: React.FC = () => {
+  const { t } = useI18n();
+
+  const {
+    control,
+    formState: { errors },
+  } = useForm<QrEmailSmsFormData>({
+    resolver: zodResolver(QrEmailSmsGeneratorSchema),
+    defaultValues: defaultQrEmailSmsFormData,
+    mode: "onChange",
+  });
+
+  // Следим только за режимом (Mode)
+  const currentMode = useWatch({ control, name: "mode" });
+
+  const emailErrors = errors as FieldErrors<EmailMode>;
+  const smsErrors = errors as FieldErrors<SmsMode>;
 
   return (
     <Box
@@ -128,118 +200,136 @@ export const QrEmailSmsGenerator: React.FC = () => {
       }}
     >
       <Typography variant="h5" component="h2" gutterBottom>
-        Генератор QR-кода для Email или SMS
+        {t("generator_email_sms_title")}
       </Typography>
 
-      {/* Переключатель режима */}
+      {/* Переключатель режима - ИСПОЛЬЗУЕМ CONTROLLER */}
       <FormControl component="fieldset" margin="normal">
-        <FormLabel component="legend">Выберите тип QR-кода:</FormLabel>
-        <RadioGroup
-          row
-          value={mode}
-          onChange={(e) => setMode(e.target.value as GeneratorMode)}
-        >
-          <FormControlLabel value="email" control={<Radio />} label="Email" />
-          <FormControlLabel value="sms" control={<Radio />} label="SMS" />
-        </RadioGroup>
+        <FormLabel component="legend">{t("email_sms_mode_label")}</FormLabel>
+        <Controller
+          name="mode"
+          control={control}
+          render={({ field }) => (
+            <RadioGroup row {...field}>
+              <FormControlLabel
+                value="email"
+                control={<Radio />}
+                label="Email"
+              />
+              <FormControlLabel value="sms" control={<Radio />} label="SMS" />
+            </RadioGroup>
+          )}
+        />
       </FormControl>
 
       {/* --- Поля для режима EMAIL --- */}
-      {mode === "email" && (
+      {currentMode === "email" && (
         <Box sx={{ mt: 2 }}>
-          <TextField
-            fullWidth
-            label="Email получателя"
-            variant="outlined"
-            value={emailTo}
-            onChange={(e) => setEmailTo(e.target.value)}
-            margin="normal"
-            type="email"
-            helperText="Обязательно: адрес, на который будет отправлено письмо."
+          <Controller
+            name="to"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                fullWidth
+                label={t("email_to_label")}
+                variant="outlined"
+                margin="normal"
+                type="email"
+                error={!!emailErrors.to}
+                helperText={
+                  emailErrors.to
+                    ? t(emailErrors.to.message as "email_error_empty_to")
+                    : t("email_to_helper")
+                }
+              />
+            )}
           />
-          <TextField
-            fullWidth
-            label="Тема письма"
-            variant="outlined"
-            value={emailSubject}
-            onChange={(e) => setEmailSubject(e.target.value)}
-            margin="normal"
+          <Controller
+            name="subject"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                fullWidth
+                label={t("email_subject_label")}
+                variant="outlined"
+                margin="normal"
+                helperText={t("email_subject_helper")}
+              />
+            )}
           />
-          <TextField
-            fullWidth
-            label="Текст письма (необязательно)"
-            variant="outlined"
-            value={emailBody}
-            onChange={(e) => setEmailBody(e.target.value)}
-            margin="normal"
-            multiline
-            rows={3}
+          <Controller
+            name="body"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                fullWidth
+                label={t("email_body_label")}
+                variant="outlined"
+                margin="normal"
+                multiline
+                rows={3}
+                helperText={t("email_body_helper")}
+              />
+            )}
           />
         </Box>
       )}
 
       {/* --- Поля для режима SMS --- */}
-      {mode === "sms" && (
+      {currentMode === "sms" && (
         <Box sx={{ mt: 2 }}>
-          <TextField
-            fullWidth
-            label="Номер телефона"
-            variant="outlined"
-            value={smsPhone}
-            onChange={(e) => setSmsPhone(e.target.value)}
-            margin="normal"
-            type="tel"
-            helperText="Обязательно: номер телефона, на который будет отправлено SMS."
+          <Controller
+            name="phone"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                fullWidth
+                label={t("sms_phone_label")}
+                variant="outlined"
+                margin="normal"
+                type="tel"
+                error={!!smsErrors.phone}
+                helperText={
+                  smsErrors.phone
+                    ? t(smsErrors.phone.message as "sms_error_empty_phone")
+                    : t("sms_phone_helper")
+                }
+              />
+            )}
           />
-          <TextField
-            fullWidth
-            label="Текст SMS-сообщения (необязательно)"
-            variant="outlined"
-            value={smsBody}
-            onChange={(e) => setSmsBody(e.target.value)}
-            margin="normal"
-            multiline
-            rows={3}
-            inputProps={{ maxLength: 160 }} // Ограничение на длину SMS
-            helperText={`Максимум 160 символов. Текущая длина: ${smsBody.length}`}
+          <Controller
+            name="body"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                fullWidth
+                label={t("sms_body_label")}
+                variant="outlined"
+                margin="normal"
+                multiline
+                rows={3}
+                inputProps={{ maxLength: 160 }}
+                // Здесь комбинируем сообщение об ошибке Zod и счетчик символов
+                helperText={
+                  smsErrors.body
+                    ? t(smsErrors.body.message as "sms_error_max_length")
+                    : t("sms_body_helper_length", {
+                        current: field.value?.length || 0,
+                      })
+                }
+              />
+            )}
           />
         </Box>
       )}
 
-      {/* Область вывода QR-кода */}
-      <Paper
-        elevation={6}
-        sx={{
-          mt: 4,
-          p: 3,
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-        }}
-      >
-        {displayQrCode}
-      </Paper>
-
-      <Typography
-        variant="body2"
-        sx={{
-          mt: 2,
-          textAlign: "center",
-          color: "text.secondary",
-          wordBreak: "break-all",
-        }}
-      >
-        **Кодируемые данные:** {hasData ? qrData : "Нет данных для кодирования"}
-      </Typography>
-
-      <Typography
-        variant="caption"
-        display="block"
-        sx={{ mt: 1, textAlign: "center", color: "text.secondary" }}
-      >
-        Сканируйте этот код, чтобы быстро отправить{" "}
-        {mode === "email" ? "письмо" : "SMS"}!
-      </Typography>
+      {/* Вставляем компонент для QR-кода */}
+      <QrCodeDisplaySection control={control} errors={errors} />
     </Box>
   );
 };

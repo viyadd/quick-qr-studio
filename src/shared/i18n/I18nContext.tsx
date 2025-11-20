@@ -14,7 +14,10 @@ import { Language, Translations, i18nResources } from "./translations";
 // 1. Определяем тип контекста
 interface I18nContextType {
   lang: Language;
-  t: (key: keyof Translations) => string; // Функция перевода
+  t: (
+    key: keyof Translations,
+    replacements?: Record<string, string | number> // Добавляем тип для переменных
+  ) => string;
   setLang: (lang: Language) => void;
 }
 
@@ -41,9 +44,32 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({
   const [lang, setLang] = useState<Language>(initialLang);
 
   const t = useCallback(
-    (key: keyof Translations): string => {
-      // Здесь используем lang
-      return i18nResources[lang][key] || key;
+    (
+      key: keyof Translations,
+      replacements?: Record<string, string | number> // Принимаем переменные
+    ): string => {
+      // 1. Получаем исходную строку перевода
+      let translatedString = i18nResources[lang][key] || key;
+
+      // 2. ЛОГИКА ИНТЕРПОЛЯЦИИ (подстановки переменных)
+      if (replacements) {
+        // Проходим по всем ключам в объекте replacements (например, 'current')
+        for (const placeholderKey in replacements) {
+          if (replacements.hasOwnProperty(placeholderKey)) {
+            // Преобразуем значение в строку, чтобы избежать ошибок замены
+            const value = String(replacements[placeholderKey]);
+
+            // Создаем регулярное выражение для поиска {{current}} или {{ current }}
+            // '\s*' позволяет игнорировать пробелы вокруг ключа. 'g' - для замены всех совпадений.
+            const regex = new RegExp(`{{\\s*${placeholderKey}\\s*}}`, "g");
+
+            // Заменяем шаблон (например, {{current}}) на фактическое значение
+            translatedString = translatedString.replace(regex, value);
+          }
+        }
+      }
+
+      return translatedString;
     },
     [lang]
   );

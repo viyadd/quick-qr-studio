@@ -1,7 +1,7 @@
 // src/features/QrWifiGenerator/ui/QrWifiGenerator.tsx
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect } from "react";
 import {
   TextField,
   Box,
@@ -22,19 +22,16 @@ import {
   FieldErrors,
 } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useI18n } from "@/shared/i18n/I18nContext";
+import { QrCodeDisplay } from "@/shared/ui";
+import { TranslationKeys } from "@/shared/i18n/translations";
 import {
   QrWifiGeneratorSchema,
   QrWifiFormData,
-  defaultQrWifiFormData,
+  getDefaultQrWifiFormData,
 } from "../model/QrWifiGeneratorSchema";
-import { QrCodeDisplay } from "@/shared/ui";
 
-// Типы шифрования
-const encryptionTypes = [
-  { value: "WPA", label: "WPA/WPA2" },
-  { value: "WEP", label: "WEP" },
-  { value: "nopass", label: "Нет (Без пароля)" },
-];
+// --- ФУНКЦИЯ КОДИРОВАНИЯ ---
 
 /**
  * Функция для формирования строки данных QR-кода Wi-Fi
@@ -42,23 +39,49 @@ const encryptionTypes = [
 const generateWifiString = (data: QrWifiFormData): string => {
   const { ssid, password, encryption, isHidden } = data;
 
+  // Экранирование символов
+  const escapeString = (str: string) =>
+    str.trim().replace(/([\\;:,])/g, "\\$1");
+
+  const escapedSSID = escapeString(ssid);
+  const escapedPassword = escapeString(password);
+
   const type = encryption;
-  const passwordPart = type !== "nopass" ? `P:${password?.trim()};` : "";
+  const passwordPart = type !== "nopass" ? `P:${escapedPassword};` : "";
   const hiddenPart = isHidden ? "H:true;" : "";
 
-  // Формат: WIFI:T:<type>;S:<ssid>;P:<password>;H:<hidden>;
-  return `WIFI:T:${type};S:${ssid?.trim()};${passwordPart}${hiddenPart}`;
+  if (!escapedSSID) {
+    return ""; // Не кодируем, если нет SSID
+  }
+
+  // Формат: WIFI:T:<type>;S:<ssid>;P:<password>;H:<hidden>;;
+  return `WIFI:T:${type};S:${escapedSSID};${passwordPart}${hiddenPart};;`;
 };
 
+// --- ВСПОМОГАТЕЛЬНЫЙ КОМПОНЕНТ: Поле пароля (для условной логики) ---
 const PasswordInputField: React.FC<{
   control: Control<QrWifiFormData>;
   errors: FieldErrors<QrWifiFormData>;
 }> = ({ control, errors }) => {
-  const currentEncryption = useWatch({
+  const { t } = useI18n();
+
+  // Смотрим за изменением типа шифрования
+  const encryption = useWatch({
     control,
     name: "encryption",
-  }) as QrWifiFormData["encryption"];
-  const isPasswordRequired = currentEncryption !== "nopass";
+    defaultValue: "WPA",
+  });
+
+  const isPasswordRequired = encryption !== "nopass";
+
+  // Вспомогательная функция для получения текста ошибки
+  const getHelperText = (
+    fieldName: keyof QrWifiFormData,
+    defaultKey: TranslationKeys
+  ) => {
+    const error = errors[fieldName];
+    return error ? t(error.message as TranslationKeys) : t(defaultKey);
+  };
 
   return (
     <Controller
@@ -68,19 +91,16 @@ const PasswordInputField: React.FC<{
         <TextField
           {...field}
           fullWidth
-          label="Пароль"
+          label={t("wifi_password_label")}
           variant="outlined"
-          type={isPasswordRequired ? "password" : "text"}
-          value={isPasswordRequired ? field.value : "Пароль не требуется"}
           margin="normal"
-          disabled={!isPasswordRequired}
+          type="password"
+          disabled={!isPasswordRequired} // Отключаем поле, если тип "Нет пароля"
           error={!!errors.password}
           helperText={
-            errors.password
-              ? errors.password.message
-              : isPasswordRequired
-              ? "Укажите пароль от Wi-Fi сети."
-              : "Поле отключено, так как выбран тип 'Нет пароля'."
+            !isPasswordRequired
+              ? t("wifi_password_disabled_helper")
+              : getHelperText("password", "wifi_password_helper")
           }
         />
       )}
@@ -88,34 +108,39 @@ const PasswordInputField: React.FC<{
   );
 };
 
+// --- ВСПОМОГАТЕЛЬНЫЙ КОМПОНЕНТ: Отображение QR-кода ---
 const QrCodeDisplaySection: React.FC<{
   control: Control<QrWifiFormData>;
   errors: FieldErrors<QrWifiFormData>;
 }> = ({ control, errors }) => {
-  const formData = useWatch<QrWifiFormData>({
-    control,
-    defaultValue: defaultQrWifiFormData,
-  }) as QrWifiFormData;
+  const { t } = useI18n();
 
-  // Мемоизированная строка данных для QR-кода
+  // Отслеживаем ВСЕ поля
+  const formData = useWatch<QrWifiFormData>({ control }) as QrWifiFormData;
+
   const qrData = useMemo(() => {
-    // Если есть ошибка в SSID (обязательном поле), возвращаем пустую строку для заглушки
-    if (errors.ssid) {
+    // Если есть ошибки SSID или Password, не кодируем ничего
+    if (errors.ssid || errors.password) {
       return "";
     }
     return generateWifiString(formData);
-  }, [formData, errors.ssid]);
+  }, [formData, errors.ssid, errors.password]);
 
-  // Определяем текст заглушки (Placeholder Text)
-  const placeholderText = errors.ssid
-    ? errors.ssid.message
-    : "Введите имя Wi-Fi сети (SSID)";
+  // Определяем текст заглушки/ошибки
+  const hasError = !!errors.ssid || !!errors.password;
+  // Если есть ошибка, используем ее ключ, иначе - стандартный плейсхолдер
+  const placeholderKey = (
+    hasError
+      ? errors.ssid?.message || errors.password?.message
+      : "url_placeholder"
+  ) as TranslationKeys;
+
+  const placeholderText = t(placeholderKey);
 
   return (
     <>
       <QrCodeDisplay value={qrData} placeholderText={placeholderText} />
 
-      {/* Отображение сгенерированных данных для проверки */}
       <Typography
         variant="body2"
         sx={{
@@ -125,7 +150,7 @@ const QrCodeDisplaySection: React.FC<{
           wordBreak: "break-all",
         }}
       >
-        **Кодируемые данные:** {qrData || placeholderText}
+        **Кодируемые данные:** {qrData || t("url_placeholder")}
       </Typography>
 
       <Typography
@@ -133,21 +158,54 @@ const QrCodeDisplaySection: React.FC<{
         display="block"
         sx={{ mt: 1, textAlign: "center", color: "text.secondary" }}
       >
-        Сканируйте этот код, чтобы проверить!
+        {t("url_scan_caption")}
       </Typography>
     </>
   );
 };
 
+// --- ОСНОВНОЙ КОМПОНЕНТ ---
 export const QrWifiGenerator: React.FC = () => {
+  const { t } = useI18n();
+
+  // 1. Динамически создаем массив типов шифрования с локализованными метками
+  const encryptionTypes = useMemo(
+    () => [
+      { value: "WPA", label: t("wifi_enc_wpa") },
+      { value: "WEP", label: t("wifi_enc_wep") },
+      { value: "nopass", label: t("wifi_enc_nopass") },
+    ],
+    [t]
+  );
+
+  // 2. Рассчитываем локализованные значения по умолчанию
+  const localizedDefaultValues = useMemo(() => {
+    return getDefaultQrWifiFormData(t as (key: TranslationKeys) => string);
+  }, [t]);
+
   const {
     control,
     formState: { errors },
+    reset, // Для смены языка
   } = useForm<QrWifiFormData>({
     resolver: zodResolver(QrWifiGeneratorSchema),
-    defaultValues: defaultQrWifiFormData,
+    defaultValues: localizedDefaultValues,
     mode: "onChange",
   });
+
+  // 3. Эффект для сброса формы при смене языка
+  useEffect(() => {
+    reset(localizedDefaultValues);
+  }, [localizedDefaultValues, reset]);
+
+  // Вспомогательная функция для получения текста ошибки
+  const getHelperText = (
+    fieldName: keyof QrWifiFormData,
+    defaultKey: TranslationKeys
+  ) => {
+    const error = errors[fieldName];
+    return error ? t(error.message as TranslationKeys) : t(defaultKey);
+  };
 
   return (
     <Box
@@ -159,10 +217,10 @@ export const QrWifiGenerator: React.FC = () => {
       }}
     >
       <Typography variant="h5" component="h2" gutterBottom>
-        Генератор QR-кода для Wi-Fi
+        {t("generator_wifi_title")}
       </Typography>
 
-      {/* Поле SSID - ИСПОЛЬЗУЕМ CONTROLLER */}
+      {/* --- Поле SSID --- */}
       <Controller
         name="ssid"
         control={control}
@@ -170,31 +228,29 @@ export const QrWifiGenerator: React.FC = () => {
           <TextField
             {...field}
             fullWidth
-            label="Имя сети (SSID)"
+            label={t("wifi_ssid_label")}
             variant="outlined"
             margin="normal"
             error={!!errors.ssid}
-            helperText={
-              errors.ssid
-                ? errors.ssid.message
-                : "Укажите точное имя вашей Wi-Fi сети."
-            }
+            helperText={getHelperText("ssid", "wifi_ssid_helper")}
           />
         )}
       />
 
-      {/* Выбор Типа шифрования - ИСПОЛЬЗУЕМ CONTROLLER */}
+      {/* --- Выбор Типа Шифрования --- */}
       <Controller
         name="encryption"
         control={control}
         render={({ field }) => (
           <FormControl fullWidth margin="normal">
-            <InputLabel id="encryption-select-label">Тип шифрования</InputLabel>
+            <InputLabel id="encryption-select-label">
+              {t("wifi_encryption_label")}
+            </InputLabel>
             <Select
               {...field}
               labelId="encryption-select-label"
               id="encryption-select"
-              label="Тип шифрования"
+              label={t("wifi_encryption_label")}
             >
               {encryptionTypes.map((type) => (
                 <MenuItem key={type.value} value={type.value}>
@@ -206,10 +262,10 @@ export const QrWifiGenerator: React.FC = () => {
         )}
       />
 
-      {/* Вставляем наш новый изолированный компонент для поля пароля */}
+      {/* --- Поле Пароля (Условный рендеринг и логика) --- */}
       <PasswordInputField control={control} errors={errors} />
 
-      {/* Флажок Скрытая сеть - ИСПОЛЬЗУЕМ CONTROLLER */}
+      {/* --- Флажок Скрытая сеть --- */}
       <Box sx={{ mt: 2 }}>
         <Controller
           name="isHidden"
@@ -225,13 +281,13 @@ export const QrWifiGenerator: React.FC = () => {
                   color="primary"
                 />
               }
-              label="Скрытая сеть (Hidden Network)"
+              label={t("wifi_is_hidden_label")}
             />
           )}
         />
       </Box>
 
-      {/* Вставляем компонент для QR-кода */}
+      {/* --- Секция QR-кода --- */}
       <QrCodeDisplaySection control={control} errors={errors} />
     </Box>
   );
