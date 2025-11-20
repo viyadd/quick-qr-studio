@@ -7,6 +7,7 @@ export type TranslationKeys =
   | "tab_wifi"
   | "tab_contacts"
   | "tab_email_sms"
+  | "tab_about_app"
   | "generator_url_title"
   | "generator_wifi_title"
   | "generator_contact_title"
@@ -16,7 +17,10 @@ export type TranslationKeys =
   | "url_placeholder"
   | "url_scan_caption"
   | "url_error_invalid"
-  | "url_error_empty";
+  | "url_error_empty"
+  | "wifi_ssid_required"
+  | "wifi_ssid_max_length"
+  | "wifi_password_required";
 
 // Тип для языкового словаря
 export type Language = "ru" | "en";
@@ -30,6 +34,7 @@ export const i18nResources: Record<Language, Translations> = {
     tab_wifi: "Wi-Fi",
     tab_contacts: "Контакты (VCard/MeCard)",
     tab_email_sms: "Email / SMS",
+    tab_about_app: "About App",
     generator_url_title: "Генератор QR-кода для URL/Текста",
     generator_wifi_title: "Генератор QR-кода для Wi-Fi",
     generator_contact_title: "Генератор QR-кода для Контакта (MeCard)",
@@ -40,6 +45,9 @@ export const i18nResources: Record<Language, Translations> = {
     url_scan_caption: "Сканируйте этот код, чтобы проверить!",
     url_error_invalid: "Введите корректный URL (например, https://...)",
     url_error_empty: "QR-код будет пустым, если не ввести данные.",
+    wifi_ssid_required: "Имя сети (SSID) не может быть пустым.",
+    wifi_ssid_max_length: "SSID должен быть короче 32 символов.",
+    wifi_password_required: "Пароль обязателен для выбранного типа шифрования.",
   },
   en: {
     app_title: "⚡ QuickQR Studio",
@@ -47,6 +55,7 @@ export const i18nResources: Record<Language, Translations> = {
     tab_wifi: "Wi-Fi",
     tab_contacts: "Contacts (VCard/MeCard)",
     tab_email_sms: "Email / SMS",
+    tab_about_app: "About App",
     generator_url_title: "QR Code Generator for URL/Text",
     generator_wifi_title: "QR Code Generator for Wi-Fi",
     generator_contact_title: "QR Code Generator for Contact (MeCard)",
@@ -57,5 +66,9 @@ export const i18nResources: Record<Language, Translations> = {
     url_scan_caption: "Scan this code to check!",
     url_error_invalid: "Please enter a valid URL (e.g., https://...)",
     url_error_empty: "The QR code will be empty if no data is entered.",
+    wifi_ssid_required: "Network Name (SSID) cannot be empty.",
+    wifi_ssid_max_length: "SSID must be shorter than 32 characters.",
+    wifi_password_required:
+      "Password is required for the selected encryption type.",
   },
 };
